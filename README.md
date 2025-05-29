@@ -1,10 +1,10 @@
 <p align="center">
-  <!-- Replace with your own logo -->
   <img src="/docs/logo.png" alt="comptime-hashmap logo" width="75%"/>
 </p>
 
-**comphash** is a zero‑dependency Zig package that generates perfect, read‑only hash maps entirely at **comptime**.  Supply your key/value pairs once and receive a fully‑typed lookup table with:
+**comphash** is a zero‑dependency Zig package offering a generic, zero-cost compile-time hash map for immutable, O(1) string-keyed lookups without any runtime allocations. 
 
+Supply your key/value pairs once and receive a fully‑typed lookup table with:
 * **O(1)** expected access.
 * Custom **hash functions** (defaults to `xxHash64`).
 * Multiple **probing strategies** (linear, quadratic, pseudo‑random, bidirectional, triangular).
