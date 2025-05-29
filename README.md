@@ -3,9 +3,7 @@
   <img src="/docs/logo.png" alt="comptime-hashmap logo" width="75%"/>
 </p>
 
-# **Comptime HashMap**
-
-**Comptime HashMap** is a zero‑dependency Zig package that generates perfect, read‑only hash maps entirely at **comptime**.  Supply your key/value pairs once and receive a fully‑typed lookup table with:
+**comphash** is a zero‑dependency Zig package that generates perfect, read‑only hash maps entirely at **comptime**.  Supply your key/value pairs once and receive a fully‑typed lookup table with:
 
 * **O(1)** expected access.
 * Custom **hash functions** (defaults to `xxHash64`).
@@ -61,7 +59,7 @@ This lets you `const ch = @import("comphash");` in your Zig code.
 
 ```zig
 const std = @import("std");
-const ch = @import("comptime_hashmap");
+const ch = @import("comphash");
 
 const FruitMap = ch.ComptimeHashMap(u32, null, null, null);
 
@@ -130,4 +128,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## 📞 **Contact & Contributing**
 
-Feel free to open an [issue](https://github.com/galactixx/comptime-hashmap/issues) or a pull request.  Discussion and feedback are welcome!
+Feel free to open an [issue](https://github.com/galactixx/comphash/issues) or a pull request.  Discussion and feedback are welcome!
