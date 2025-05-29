@@ -2,15 +2,7 @@
   <img src="/docs/logo.png" alt="comptime-hashmap logo" width="75%"/>
 </p>
 
-**comphash** is a zero‑dependency Zig package offering a generic, zero-cost compile-time hash map for immutable, O(1) string-keyed lookups without any runtime allocations. 
-
-Supply your key/value pairs once and receive a fully‑typed lookup table with:
-* **O(1)** expected access.
-* Custom **hash functions** (defaults to `xxHash64`).
-* Multiple **probing strategies** (linear, quadratic, pseudo‑random, bidirectional, triangular).
-* Idiomatic **iterator** helpers (keys, values, items).
-* **No runtime allocations** or pointer chasing.
-* Works at **runtime and comptime** alike.
+**comphash** is a very lightweight zero‑dependency Zig package offering a zero-cost compile-time hash map for immutable, O(1) string-keyed lookups without any runtime allocations. 
 
 Perfect for command‑line flag tables, protocol constant look‑ups, compile‑time DSLs, and any situation where the set of keys is known ahead of time.
 
@@ -20,10 +12,12 @@ Perfect for command‑line flag tables, protocol constant look‑ups, compile‑
 
 | Category                | Details                                                                                                            |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Lookup                  | O(1) expected access.                                                                                              |
 | **Hash Algorithms**     | Use any `fn([]const u8) u64` — the default is **xxHash64** from [`zighash`](https://github.com/galactixx/zighash). |
 | **Probing**             | `Prober` enum: `Linear`, `Quadratic`, `PseudoRandom`, `Bidirectional`, `Triangular`.                               |
 | **Iterators**           | Type‑driven `keys()`, `values()`, `items()`—all lazy and allocation‑free.                                          |
 | **No Deps**             | Pure Zig, no libc, no external libs.                                                                               |
+| **Allocation**          | No runtime allocations or pointer chasing.                                                                         |
 | **Comprehensive Tests** | Built‑in `std.testing` ensures correctness across probing strategies.                                              |
 
 ---
@@ -116,7 +110,6 @@ Select with the third parameter to `ComptimeHashMap`.
 
 * Table size is the next power‑of‑two ≥ `2 × n` keys, providing a load factor ≤ 0.5.
 * When you pass your own hash function and/or probe strategy you can tune speed vs. clustering for your domain.
-* All computations fold to constants when `init` is invoked at comptime—zero runtime overhead for look‑ups.
 
 ---
 
