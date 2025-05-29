@@ -73,9 +73,9 @@ fn defaultEql(x: []const u8, y: []const u8) bool {
 pub fn ComptimeHashMap(
     comptime V: type,
     comptime kvPairs: []const struct { []const u8, V },
-    hasher: ?fn ([]const u8) u64,
-    prober: ?Prober,
-    eql: ?fn ([]const u8, []const u8) bool,
+    comptime hasher: ?fn ([]const u8) u64,
+    comptime prober: ?Prober,
+    comptime eql: ?fn ([]const u8, []const u8) bool,
 ) type {
     const hashMethod = hasher orelse defaultHasher;
     const probe = prober orelse Prober.Linear;
@@ -84,9 +84,17 @@ pub fn ComptimeHashMap(
 
     const Pair = struct { key: []const u8, value: V };
 
+    // check to ensure that there are no duplicates keys
+    for (kvPairs, 0..) |kv1, i| {
+        for (kvPairs[i + 1 ..]) |kv2| {
+            if (eqlMethod(kv1[0], kv2[0])) {
+                @compileError("there are duplicate keys for {any}" + kv1[0]);
+            }
+        }
+    }
+
     const KVPair = union(enum) {
         Empty,
-        Deleted,
         Occupied: Pair,
     };
 
@@ -176,19 +184,9 @@ pub fn ComptimeHashMap(
             };
         }
 
-        /// number of entries in the map.
-        pub fn length(self: Self) usize {
-            return self.mapItems.len;
-        }
-
-        /// check if the map has no entries.
-        pub fn isEmpty(self: Self) bool {
-            return self.length() == 0;
-        }
-
-        /// return the underlying table capacity.
-        pub fn capacity(_: Self) usize {
-            return M;
+        /// returns a read-only slice of all key/value pairs
+        pub fn toSlice(self: *const Self) []const Pair {
+            return self.mapItems[0..];
         }
 
         /// return an iterator over keys.
@@ -214,6 +212,21 @@ pub fn ComptimeHashMap(
             return self.getIndex(key) != null;
         }
 
+        /// number of entries in the map.
+        pub fn length(self: Self) usize {
+            return self.mapItems.len;
+        }
+
+        /// check if the map has no entries.
+        pub fn isEmpty(self: Self) bool {
+            return self.length() == 0;
+        }
+
+        /// return the underlying table capacity.
+        pub fn capacity(_: Self) usize {
+            return M;
+        }
+
         /// find the bucket index for a key, or null if missing.
         pub fn getIndex(self: Self, key: []const u8) ?usize {
             var bucketsSeen: usize = 0;
@@ -225,7 +238,6 @@ pub fn ComptimeHashMap(
                 switch (self.mapTable[bucketIdx]) {
                     .Empty => false,
                     .Occupied => |kvPair| !eqlMethod(kvPair.key, key),
-                    else => true,
                 }) : (i += 1)
             {
                 bucketIdx = probeMethod(bucketIdx, i) & (M - 1);
