@@ -22,38 +22,38 @@ fn splitMix64(base: u64, i: u64) u64 {
 /// returns the probing function for the given Prober strategy.
 fn getProber(prober: Prober) fn (base: u64, i: u64) u64 {
     return switch (prober) {
-        Prober.Linear => struct {
+        .Linear => struct {
             /// linear probing: next = base + i
             pub fn function(base: u64, i: u64) u64 {
                 return base +% i;
             }
         }.function,
-        Prober.Quadratic => struct {
+        .Quadratic => struct {
             /// quadratic probing: next = base + (1 << i)
             pub fn function(base: u64, i: u64) u64 {
-                return base +% (1 << i);
+                return base +% i +% (i *% i);
             }
         }.function,
-        Prober.PseudoRandom => struct {
+        .PseudoRandom => struct {
             /// pseudo-random probing via splitMix64
             pub fn function(base: u64, i: u64) u64 {
                 return splitMix64(base, i);
             }
         }.function,
-        Prober.Bidirectional => struct {
+        .Bidirectional => struct {
             /// bidirectional probing: alternates forward/backward offsets
             pub fn function(base: u64, i: u64) u64 {
                 const half = i / 2;
-                const offset: i64 = @intCast(if ((i & 1) == 1) half + 1 else -half);
+                const offset: i64 = @intCast(if ((i & 1) == 1) half +% 1 else -half);
                 const baseSigned: i64 = @intCast(base);
                 return @intCast(baseSigned + offset);
             }
         }.function,
-        Prober.Triangular => struct {
+        .Triangular => struct {
             /// triangular probing: next = base + (i*(i+1)/2)
             pub fn function(base: u64, i: u64) u64 {
-                const offset = (i * (i + 1)) / 2;
-                return base + offset;
+                const offset = (i *% (i +% 1)) / 2;
+                return base +% offset;
             }
         }.function,
     };
@@ -72,7 +72,6 @@ fn defaultEql(x: []const u8, y: []const u8) bool {
 /// generates a compile-time hash map type for key/value pairs known at comptime.
 pub fn ComptimeHashMap(
     comptime V: type,
-    comptime kvPairs: []const struct { []const u8, V },
     comptime hasher: ?fn ([]const u8) u64,
     comptime prober: ?Prober,
     comptime eql: ?fn ([]const u8, []const u8) bool,
@@ -84,21 +83,10 @@ pub fn ComptimeHashMap(
 
     const Pair = struct { key: []const u8, value: V };
 
-    // check to ensure that there are no duplicates keys
-    for (kvPairs, 0..) |kv1, i| {
-        for (kvPairs[i + 1 ..]) |kv2| {
-            if (eqlMethod(kv1[0], kv2[0])) {
-                @compileError("there are duplicate keys for {any}" + kv1[0]);
-            }
-        }
-    }
-
     const KVPair = union(enum) {
         Empty,
         Occupied: Pair,
     };
-
-    const M = try std.math.ceilPowerOfTwo(usize, kvPairs.len * 2);
 
     return struct {
         const Self = @This();
@@ -106,8 +94,9 @@ pub fn ComptimeHashMap(
         hasher: fn ([]const u8) u64,
         prober: fn (base: u64, i: u64) u64,
         eqler: fn ([]const u8, []const u8) bool,
-        mapTable: [M]KVPair,
-        mapItems: [kvPairs.len]Pair,
+        mapTable: []const KVPair,
+        mapItems: []const Pair,
+        mapCap: usize,
 
         /// iterator type generator: yields type-specific iterators.
         fn Iterator(comptime R: type) type {
@@ -155,9 +144,24 @@ pub fn ComptimeHashMap(
         }
 
         /// build and return a new map instance, filling the table and items.
-        pub fn init() Self {
-            var mapItems: [kvPairs.len]Pair = undefined;
-            var mapTable: [M]KVPair = [_]KVPair{KVPair.Empty} ** M;
+        pub fn init(comptime kvPairs: []const struct { []const u8, V }) Self {
+            if (kvPairs.len == 0) {
+                @compileError("no key-value pairs supplied");
+            }
+
+            const M = try std.math.ceilPowerOfTwo(usize, kvPairs.len * 2);
+
+            // check to ensure that there are no duplicates keys
+            for (kvPairs, 0..) |kv1, i| {
+                for (kvPairs[i + 1 ..]) |kv2| {
+                    if (eqlMethod(kv1[0], kv2[0])) {
+                        @compileError("there are duplicate keys for {any}" + kv1[0]);
+                    }
+                }
+            }
+
+            var initItems: [kvPairs.len]Pair = undefined;
+            var initTable: [M]KVPair = [_]KVPair{KVPair.Empty} ** M;
 
             for (kvPairs, 0..) |kvPair, idx| {
                 const computedHash = hashMethod(kvPair[0]);
@@ -166,21 +170,25 @@ pub fn ComptimeHashMap(
                 var bucketIdx: u64 = baseIndex;
 
                 // Probe until an empty slot is found
-                while (!(mapTable[bucketIdx] == KVPair.Empty)) : (i += 1) {
+                while (!(initTable[bucketIdx] == KVPair.Empty)) : (i += 1) {
                     bucketIdx = probeMethod(baseIndex, i) & (M - 1);
                 }
 
                 const pair = Pair{ .key = kvPair[0], .value = kvPair[1] };
-                mapTable[bucketIdx] = KVPair{ .Occupied = pair };
-                mapItems[idx] = pair;
+                initTable[bucketIdx] = KVPair{ .Occupied = pair };
+                initItems[idx] = pair;
             }
+
+            const mapTable = initTable;
+            const mapItems = initItems;
 
             return Self{
                 .hasher = hashMethod,
                 .prober = probeMethod,
                 .eqler = eqlMethod,
-                .mapTable = mapTable,
-                .mapItems = mapItems,
+                .mapTable = &mapTable,
+                .mapItems = &mapItems,
+                .mapCap = M,
             };
         }
 
@@ -223,35 +231,72 @@ pub fn ComptimeHashMap(
         }
 
         /// return the underlying table capacity.
-        pub fn capacity(_: Self) usize {
-            return M;
+        pub fn capacity(self: Self) usize {
+            return self.mapCap;
         }
 
         /// find the bucket index for a key, or null if missing.
         pub fn getIndex(self: Self, key: []const u8) ?usize {
-            var bucketsSeen: usize = 0;
-            const keyHash: u64 = hashMethod(key);
-            var bucketIdx = keyHash & (M - 1);
             var i: usize = 0;
+            const keyHash: u64 = hashMethod(key);
+            var bucketIdx = keyHash & (self.mapCap - 1);
 
-            while (bucketsSeen != M and
+            while (i < self.mapCap and
                 switch (self.mapTable[bucketIdx]) {
                     .Empty => false,
                     .Occupied => |kvPair| !eqlMethod(kvPair.key, key),
-                }) : (i += 1)
+                })
             {
-                bucketIdx = probeMethod(bucketIdx, i) & (M - 1);
-                bucketsSeen += 1;
+                bucketIdx = probeMethod(bucketIdx, i) & (self.mapCap - 1);
+                i += 1;
             }
 
-            return if (bucketsSeen != M) bucketIdx else null;
+            return if (i < self.mapCap) bucketIdx else null;
         }
 
         /// get the value for a key, or null if not found.
         pub fn get(self: Self, key: []const u8) ?V {
             const idx = self.getIndex(key) orelse return null;
             const bucket = self.mapTable[idx];
-            return bucket.Occupied.value;
+            return switch (bucket) {
+                .Occupied => |kvPair| kvPair.value,
+                .Empty => null,
+            };
         }
     };
+}
+
+test "basic get/contains/length" {
+    const kv: []const struct { []const u8, u32 } = &.{
+        .{ "apple", 10 },
+        .{ "banana", 20 },
+        .{ "cherry", 30 },
+    };
+    const FruitMap = ComptimeHashMap(u32, null, null, null);
+    const map = FruitMap.init(kv[0..]);
+
+    try std.testing.expect(!map.isEmpty());
+    try std.testing.expect(map.length() == kv.len);
+    try std.testing.expect(map.contains("apple"));
+    try std.testing.expect(map.get("apple") orelse 0 == 10);
+    try std.testing.expect(map.get("banana") orelse 0 == 20);
+    try std.testing.expect(map.get("durian") == null);
+}
+
+test "probe strategies consistency" {
+    const kv: []const struct { []const u8, u32 } = &.{
+        .{ "x", 100 },
+        .{ "y", 200 },
+    };
+    // quadratic probing
+    const QMap = ComptimeHashMap(u32, null, Prober.Quadratic, null);
+    const mapQ = QMap.init(kv[0..]);
+    try std.testing.expect(mapQ.get("x") orelse 0 == 100);
+    try std.testing.expect(mapQ.get("y") orelse 0 == 200);
+
+    // pseudo-random probing
+    const RMap = ComptimeHashMap(u32, null, Prober.PseudoRandom, null);
+    const mapR = RMap.init(kv[0..]);
+    try std.testing.expect(mapR.get("x") orelse 0 == 100);
+    try std.testing.expect(mapR.get("y") orelse 0 == 200);
 }

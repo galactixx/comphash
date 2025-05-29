@@ -3,8 +3,8 @@
     .version = "0.1.0",
     .dependencies = .{
         .zighash = .{
-            .url = "git+https://github.com/galactixx/zighash?ref=v0.2.0#8f8c8e9eb8fa9bf849fd2b4ddab57f5a221939f3",
-            .hash = "zighash-0.2.0-vI0CjXaqAACjWppomhU12-rcWi_-d4Q63kYwJZ-3UtAw",
+            .url = "git+https://github.com/galactixx/zighash?ref=v0.2.0#637df9622c31bf8ef5696212ccb5c006e7657fb5",
+            .hash = "zighash-0.2.0-vI0CjfiqAADoDlW4f89g-APRtq-d_x1rT8x12OpH27G_",
         },
     },
     .minimum_zig_version = "0.14.0",
