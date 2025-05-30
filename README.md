@@ -2,7 +2,7 @@
   <img src="/docs/logo.png" alt="comptime-hashmap logo" width="75%"/>
 </p>
 
-**comphash** is a very lightweight zero‑dependency Zig package offering a zero-cost compile-time hash map for immutable, O(1) string-keyed lookups without any runtime allocations. 
+**comphash** is a very lightweight Zig package offering a zero-cost compile-time hash map for immutable, O(1) string-keyed lookups without any runtime allocations.
 
 Perfect for command‑line flag tables, protocol constant look‑ups, compile‑time DSLs, and any situation where the set of keys is known ahead of time.
 
