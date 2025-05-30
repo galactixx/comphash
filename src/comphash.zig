@@ -133,14 +133,14 @@ pub fn ComptimeHashMap(
             }
 
             const lenFloat: f64 = @floatFromInt(kvPairs.len);
-            const initCap: u64 = @bitCast(lenFloat / 0.7);
+            const initCap: u64 = @intFromFloat(lenFloat / 0.7);
             const M = try std.math.ceilPowerOfTwo(u64, initCap);
 
             // check to ensure that there are no duplicates keys
             for (kvPairs, 0..) |kv1, i| {
                 for (kvPairs[i + 1 ..]) |kv2| {
                     if (eqlMethod(kv1[0], kv2[0])) {
-                        @compileError("there are duplicate keys for {any}" + kv1[0]);
+                        @compileError("there are duplicate keys for " + kv1[0]);
                     }
                 }
             }
@@ -159,8 +159,11 @@ pub fn ComptimeHashMap(
                 var i: u64 = 0;
                 var bucketIdx: u64 = baseIndex;
 
-                // Probe until an empty slot is found
-                while (!(initTable[bucketIdx] == KVPair.Empty)) : (i += 1) {
+                // probe until an empty slot is found
+                while (switch (initTable[bucketIdx]) {
+                    .Empty => false,
+                    .Occupied => true,
+                }) : (i += 1) {
                     bucketIdx = probeMethod(baseIndex, i, secondHash) & (M - 1);
                 }
 
