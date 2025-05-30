@@ -14,7 +14,7 @@ Perfect for command‑line flag tables, protocol constant look‑ups, compile‑
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Lookup                  | O(1) expected access.                                                                                              |
 | **Hash Algorithms**     | Use any `fn([]const u8) u64` — the default is **xxHash64** from [`zighash`](https://github.com/galactixx/zighash). |
-| **Probing**             | `Prober` enum: `Linear`, `Quadratic`, `PseudoRandom`, `Bidirectional`, `Triangular`.                               |
+| **Probing**             | `Prober` enum: `Linear`, `Quadratic`, `DoubleHash`, `Bidirectional`, `Triangular`.                               |
 | **Iterators**           | Type‑driven `keys()`, `values()`, `items()`—all lazy and allocation‑free.                                          |
 | **No Deps**             | Pure Zig, no libc, no external libs.                                                                               |
 | **Allocation**          | No runtime allocations or pointer chasing.                                                                         |
@@ -98,7 +98,7 @@ Enum controlling collision resolution:
 
 * `Linear` – `base + i`
 * `Quadratic` – `base + i + i²`
-* `PseudoRandom` – SplitMix64‑based
+* `DoubleHash` – `base + i * (h(key) | 1)`
 * `Bidirectional` – Alternates ±offsets
 * `Triangular` – `base + i * (i + 1) / 2`
 

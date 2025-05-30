@@ -4,54 +4,43 @@ const zh = @import("zighash");
 pub const Prober = enum {
     Linear,
     Quadratic,
-    PseudoRandom,
+    DoubleHash,
     Bidirectional,
     Triangular,
 };
 
-/// a simple split-mix integer hash used for pseudo-random probing.
-fn splitMix64(base: u64, i: u64) u64 {
-    var z = base ^ i;
-    z +%= 0x9E3779B97F4A7C15;
-    z = (z ^ (z >> 30)) *% 0xBF58476D1CE4E5B9;
-    z = (z ^ (z >> 27)) *% 0x94D049BB133111EB;
-    const rand_i = z ^ (z >> 31);
-    return base +% rand_i;
-}
-
 /// returns the probing function for the given Prober strategy.
-fn getProber(prober: Prober) fn (base: u64, i: u64) u64 {
+fn getProber(prober: Prober) fn (base: u64, i: u64, _: u64) u64 {
     return switch (prober) {
         .Linear => struct {
             /// linear probing: next = base + i
-            pub fn function(base: u64, i: u64) u64 {
+            pub fn function(base: u64, i: u64, _: u64) u64 {
                 return base +% i;
             }
         }.function,
         .Quadratic => struct {
             /// quadratic probing: next = base + (1 << i)
-            pub fn function(base: u64, i: u64) u64 {
+            pub fn function(base: u64, i: u64, _: u64) u64 {
                 return base +% i +% (i *% i);
             }
         }.function,
-        .PseudoRandom => struct {
-            /// pseudo-random probing via splitMix64
-            pub fn function(base: u64, i: u64) u64 {
-                return splitMix64(base, i);
+        .DoubleHash => struct {
+            /// doublehashing additionally using cityHash64
+            pub fn function(base: u64, i: u64, sec: u64) u64 {
+                return base +% i *% sec;
             }
         }.function,
         .Bidirectional => struct {
             /// bidirectional probing: alternates forward/backward offsets
-            pub fn function(base: u64, i: u64) u64 {
-                const half: i64 = @intCast(i / 2);
-                const offset: i64 = if ((i & 1) == 1) half +% 1 else -half;
-                const baseSigned: i64 = @intCast(base);
-                return @intCast(baseSigned +% offset);
+            pub fn function(base: u64, i: u64, _: u64) u64 {
+                const half: u64 = i / 2 + 1;
+                const offset: u64 = if (i & 1 == 1) base -% half else base +% half;
+                return offset;
             }
         }.function,
         .Triangular => struct {
             /// triangular probing: next = base + (i*(i+1)/2)
-            pub fn function(base: u64, i: u64) u64 {
+            pub fn function(base: u64, i: u64, _: u64) u64 {
                 const offset = (i *% (i +% 1)) / 2;
                 return base +% offset;
             }
@@ -93,7 +82,7 @@ pub fn ComptimeHashMap(
         const Self = @This();
 
         hasher: fn ([]const u8) u64,
-        prober: fn (base: u64, i: u64) u64,
+        prober: fn (base: u64, i: u64, _: u64) u64,
         eqler: fn ([]const u8, []const u8) bool,
         mapTable: []const KVPair,
         mapItems: []const Pair,
@@ -166,13 +155,18 @@ pub fn ComptimeHashMap(
 
             for (kvPairs, 0..) |kvPair, idx| {
                 const computedHash = hashMethod(kvPair[0]);
+                const secondHash: u64 = switch (probe) {
+                    .DoubleHash => zh.cityHash64(kvPair[0]) | 1,
+                    else => undefined,
+                };
+
                 const baseIndex = computedHash & (M - 1);
                 var i: u64 = 0;
                 var bucketIdx: u64 = baseIndex;
 
                 // Probe until an empty slot is found
                 while (!(initTable[bucketIdx] == KVPair.Empty)) : (i += 1) {
-                    bucketIdx = probeMethod(baseIndex, i) & (M - 1);
+                    bucketIdx = probeMethod(baseIndex, i, secondHash) & (M - 1);
                 }
 
                 const pair = Pair{ .key = kvPair[0], .value = kvPair[1] };
@@ -244,6 +238,11 @@ pub fn ComptimeHashMap(
             var bucketIdx = baseIdx;
             var foundKey = false;
 
+            const secondHash: u64 = switch (probe) {
+                .DoubleHash => zh.cityHash64(key) | 1,
+                else => undefined,
+            };
+
             while (i < self.length()) {
                 switch (self.mapTable[bucketIdx]) {
                     .Empty => break,
@@ -252,7 +251,7 @@ pub fn ComptimeHashMap(
                             foundKey = true;
                             break;
                         }
-                        bucketIdx = probeMethod(baseIdx, i) & (self.mapCap - 1);
+                        bucketIdx = probeMethod(baseIdx, i, secondHash) & (self.mapCap - 1);
                         i += 1;
                     },
                 }
@@ -300,7 +299,7 @@ test "probe strategies consistency" {
     try std.testing.expect(mapQ.get("x") orelse 0 == 100);
     try std.testing.expect(mapQ.get("y") orelse 0 == 200);
 
-    const RMap = ComptimeHashMap(u32, null, Prober.PseudoRandom, null);
+    const RMap = ComptimeHashMap(u32, null, Prober.DoubleHash, null);
     const mapR = RMap.init(kv);
     try std.testing.expect(mapR.get("x") orelse 0 == 100);
     try std.testing.expect(mapR.get("y") orelse 0 == 200);
