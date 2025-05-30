@@ -105,13 +105,6 @@ Select with the third parameter to `ComptimeHashMap`.
 
 ---
 
-## 📈 **Performance Notes**
-
-* Table size is the next power‑of‑two ≥ `2 × n` keys, providing a load factor ≤ 0.5.
-* When you pass your own hash function and/or probe strategy you can tune speed vs. clustering for your domain.
-
----
-
 ## 🤝 **License**
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
