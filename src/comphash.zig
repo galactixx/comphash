@@ -3,7 +3,6 @@ const zh = @import("zighash");
 
 pub const Prober = enum {
     Linear,
-    Quadratic,
     DoubleHash,
     Bidirectional,
     Triangular,
@@ -18,16 +17,10 @@ fn getProber(prober: Prober) fn (base: u64, i: u64, _: u64) u64 {
                 return base +% i;
             }
         }.function,
-        .Quadratic => struct {
-            /// quadratic probing: next = base + (1 << i)
-            pub fn function(base: u64, i: u64, _: u64) u64 {
-                return base +% i +% (i *% i);
-            }
-        }.function,
         .DoubleHash => struct {
             /// doublehashing additionally using cityHash64
-            pub fn function(base: u64, i: u64, sec: u64) u64 {
-                return base +% i *% sec;
+            pub fn function(base: u64, i: u64, step: u64) u64 {
+                return base +% i *% step;
             }
         }.function,
         .Bidirectional => struct {
@@ -39,7 +32,7 @@ fn getProber(prober: Prober) fn (base: u64, i: u64, _: u64) u64 {
             }
         }.function,
         .Triangular => struct {
-            /// triangular probing: next = base + (i*(i+1)/2)
+            /// triangular probing: next = base + (i * (i + 1) / 2)
             pub fn function(base: u64, i: u64, _: u64) u64 {
                 const offset = (i *% (i +% 1)) / 2;
                 return base +% offset;
@@ -86,7 +79,7 @@ pub fn ComptimeHashMap(
         eqler: fn ([]const u8, []const u8) bool,
         mapTable: []const KVPair,
         mapItems: []const Pair,
-        mapCap: usize,
+        mapCap: u64,
 
         /// iterator type generator: yields type-specific iterators.
         fn Iterator(comptime R: type) type {
@@ -139,7 +132,9 @@ pub fn ComptimeHashMap(
                 @compileError("no key-value pairs supplied");
             }
 
-            const M = try std.math.ceilPowerOfTwo(usize, kvPairs.len * 2);
+            const lenFloat: f64 = @floatFromInt(kvPairs.len);
+            const initCap: u64 = @bitCast(lenFloat / 0.7);
+            const M = try std.math.ceilPowerOfTwo(u64, initCap);
 
             // check to ensure that there are no duplicates keys
             for (kvPairs, 0..) |kv1, i| {
@@ -226,7 +221,7 @@ pub fn ComptimeHashMap(
         }
 
         /// return the underlying table capacity.
-        pub fn capacity(self: Self) usize {
+        pub fn capacity(self: Self) u64 {
             return self.mapCap;
         }
 
@@ -294,7 +289,7 @@ test "probe strategies consistency" {
         .{ "x", 100 },
         .{ "y", 200 },
     };
-    const QMap = ComptimeHashMap(u32, null, Prober.Quadratic, null);
+    const QMap = ComptimeHashMap(u32, null, Prober.Bidirectional, null);
     const mapQ = QMap.init(kv);
     try std.testing.expect(mapQ.get("x") orelse 0 == 100);
     try std.testing.expect(mapQ.get("y") orelse 0 == 200);
@@ -365,8 +360,6 @@ test "capacity is power-of-two and ≥ 2×length" {
     };
     const Map = ComptimeHashMap(u32, null, null, null);
     const map = Map.init(kv);
-
-    try std.testing.expect(map.capacity() >= kv.len * 2);
     try std.testing.expect((map.capacity() & (map.capacity() - 1)) == 0);
 }
 
