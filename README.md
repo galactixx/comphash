@@ -27,7 +27,7 @@ Perfect for command‑line flag tables, protocol constant look‑ups, compile‑
 ### Fetch via `zig fetch`
 
 ```bash
-zig fetch --save git+https://github.com/galactixx/comphash#v0.1.0
+zig fetch --save git+https://github.com/galactixx/comphash#v0.2.0
 ```
 
 > This adds a `comphash` entry under `.dependencies` in your `build.zig.zon`.
