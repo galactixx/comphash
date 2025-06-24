@@ -1,6 +1,6 @@
 .{
     .name = .comphash,
-    .version = "0.1.0",
+    .version = "0.2.0",
     .dependencies = .{
         .zighash = .{
             .url = "git+https://github.com/galactixx/zighash?ref=v0.2.0#637df9622c31bf8ef5696212ccb5c006e7657fb5",

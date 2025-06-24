@@ -1,6 +1,7 @@
 const std = @import("std");
 const zh = @import("zighash");
 
+/// probing strategies for the hash map.
 pub const Prober = enum {
     Linear,
     DoubleHash,
@@ -18,7 +19,7 @@ fn getProber(prober: Prober) fn (base: u64, i: u64, _: u64) u64 {
             }
         }.function,
         .DoubleHash => struct {
-            /// doublehashing additionally using cityHash64
+            /// doublehashing additionally using cityHash64.
             pub fn function(base: u64, i: u64, step: u64) u64 {
                 return base +% i *% step;
             }
@@ -32,7 +33,7 @@ fn getProber(prober: Prober) fn (base: u64, i: u64, _: u64) u64 {
             }
         }.function,
         .Triangular => struct {
-            /// triangular probing: next = base + (i * (i + 1) / 2)
+            /// triangular probing: next = base + (i * (i + 1) / 2).
             pub fn function(base: u64, i: u64, _: u64) u64 {
                 const offset = (i *% (i +% 1)) / 2;
                 return base +% offset;
@@ -59,13 +60,16 @@ pub fn ComptimeHashMap(
     comptime prober: ?Prober,
     comptime eql: ?fn ([]const u8, []const u8) bool,
 ) type {
-    const hashMethod = hasher orelse defaultHasher;
+    // set the default hash, probe, and equality methods if not provided.
+    const hash_method = hasher orelse defaultHasher;
     const probe = prober orelse Prober.Linear;
-    const probeMethod = getProber(probe);
-    const eqlMethod = eql orelse defaultEql;
+    const probe_method = getProber(probe);
+    const eql_method = eql orelse defaultEql;
 
+    // define the pair type for the key-value pairs.
     const Pair = struct { key: []const u8, value: V };
 
+    // define the key-value pair union for the table.
     const KVPair = union(enum) {
         Empty,
         Occupied: Pair,
@@ -77,9 +81,9 @@ pub fn ComptimeHashMap(
         hasher: fn ([]const u8) u64,
         prober: fn (base: u64, i: u64, _: u64) u64,
         eqler: fn ([]const u8, []const u8) bool,
-        mapTable: []const KVPair,
-        mapItems: []const Pair,
-        mapCap: u64,
+        map_table: []const KVPair,
+        map_items: []const Pair,
+        map_cap: u64,
 
         /// iterator type generator: yields type-specific iterators.
         fn Iterator(comptime R: type) type {
@@ -127,95 +131,101 @@ pub fn ComptimeHashMap(
         }
 
         /// build and return a new map instance, filling the table and items.
-        pub fn init(comptime kvPairs: []const struct { []const u8, V }) Self {
-            if (kvPairs.len == 0) {
+        pub fn init(comptime kv_pairs: []const struct { []const u8, V }) Self {
+            if (kv_pairs.len == 0) {
                 @compileError("no key-value pairs supplied");
             }
 
-            const lenFloat: f64 = @floatFromInt(kvPairs.len);
-            const initCap: u64 = @intFromFloat(lenFloat / 0.7);
-            const M = try std.math.ceilPowerOfTwo(u64, initCap);
+            // calculate the initial capacity based on the number of key-value pairs.
+            const len_float: f64 = @floatFromInt(kv_pairs.len);
+            const init_cap: u64 = @intFromFloat(len_float / 0.7);
+            const M = try std.math.ceilPowerOfTwo(u64, init_cap);
 
-            // check to ensure that there are no duplicates keys
-            for (kvPairs, 0..) |kv1, i| {
-                for (kvPairs[i + 1 ..]) |kv2| {
-                    if (eqlMethod(kv1[0], kv2[0])) {
+            // check to ensure that there are no duplicate keys.
+            for (kv_pairs, 0..) |kv1, i| {
+                for (kv_pairs[i + 1 ..]) |kv2| {
+                    if (eql_method(kv1[0], kv2[0])) {
                         @compileError("there are duplicate keys for " + kv1[0]);
                     }
                 }
             }
 
-            var initItems: [kvPairs.len]Pair = undefined;
-            var initTable: [M]KVPair = [_]KVPair{KVPair.Empty} ** M;
+            // initialize the items and table with the initial capacity.
+            var init_items: [kv_pairs.len]Pair = undefined;
+            var init_table: [M]KVPair = [_]KVPair{KVPair.Empty} ** M;
 
-            for (kvPairs, 0..) |kvPair, idx| {
-                const computedHash = hashMethod(kvPair[0]);
-                const secondHash: u64 = switch (probe) {
-                    .DoubleHash => zh.cityHash64(kvPair[0]) | 1,
+            // insert the key-value pairs into the table using the hash function
+            // and probe method.
+            for (kv_pairs, 0..) |kv_pair, idx| {
+                const computed_hash = hash_method(kv_pair[0]);
+                const second_hash: u64 = switch (probe) {
+                    .DoubleHash => zh.cityHash64(kv_pair[0]) | 1,
                     else => undefined,
                 };
 
-                const baseIndex = computedHash & (M - 1);
+                // calculate the base index for the hash function.
+                const base_index = computed_hash & (M - 1);
                 var i: u64 = 0;
-                var bucketIdx: u64 = baseIndex;
+                var bucket_idx: u64 = base_index;
 
-                // probe until an empty slot is found
-                while (switch (initTable[bucketIdx]) {
+                // probe until an empty slot is found.
+                while (switch (init_table[bucket_idx]) {
                     .Empty => false,
                     .Occupied => true,
                 }) : (i += 1) {
-                    bucketIdx = probeMethod(baseIndex, i, secondHash) & (M - 1);
+                    bucket_idx = probe_method(base_index, i, second_hash) & (M - 1);
                 }
 
-                const pair = Pair{ .key = kvPair[0], .value = kvPair[1] };
-                initTable[bucketIdx] = KVPair{ .Occupied = pair };
-                initItems[idx] = pair;
+                // insert the key-value pair into the table at the calculated index.
+                const pair = Pair{ .key = kv_pair[0], .value = kv_pair[1] };
+                init_table[bucket_idx] = KVPair{ .Occupied = pair };
+                init_items[idx] = pair;
             }
 
-            const mapTable = initTable;
-            const mapItems = initItems;
-
+            // return the map instance with the initialized table and items.
+            const map_table = init_table;
+            const map_items = init_items;
             return Self{
-                .hasher = hashMethod,
-                .prober = probeMethod,
-                .eqler = eqlMethod,
-                .mapTable = &mapTable,
-                .mapItems = &mapItems,
-                .mapCap = M,
+                .hasher = hash_method,
+                .prober = probe_method,
+                .eqler = eql_method,
+                .map_table = &map_table,
+                .map_items = &map_items,
+                .map_cap = M,
             };
         }
 
-        /// returns a read-only slice of all key/value pairs
+        /// returns a read-only slice of all key/value pairs in the order of insertion.
         pub fn toSlice(self: *const Self) []const Pair {
-            return self.mapItems[0..];
+            return self.map_items[0..];
         }
 
-        /// return an iterator over keys.
+        /// return an iterator over keys in the order of insertion.
         pub fn keys(self: Self) Iterator([]const u8) {
             const Keys = Iterator([]const u8);
-            return Keys.init(self.mapItems[0..]);
+            return Keys.init(self.map_items[0..]);
         }
 
-        /// return an iterator over values.
+        /// return an iterator over values in the order of insertion.
         pub fn values(self: Self) Iterator(V) {
             const Values = Iterator(V);
-            return Values.init(self.mapItems[0..]);
+            return Values.init(self.map_items[0..]);
         }
 
-        /// return an iterator over key/value pairs.
+        /// return an iterator over key/value pairs in the order of insertion.
         pub fn items(self: Self) Iterator(Pair) {
             const Items = Iterator(Pair);
-            return Items.init(self.mapItems[0..]);
+            return Items.init(self.map_items[0..]);
         }
 
-        /// check if a key exists in the map.
+        /// check if a key exists in the map for a given key.
         pub fn contains(self: Self, key: []const u8) bool {
             return self.getIndex(key) != null;
         }
 
         /// number of entries in the map.
         pub fn length(self: Self) usize {
-            return self.mapItems.len;
+            return self.map_items.len;
         }
 
         /// check if the map has no entries.
@@ -225,45 +235,47 @@ pub fn ComptimeHashMap(
 
         /// return the underlying table capacity.
         pub fn capacity(self: Self) u64 {
-            return self.mapCap;
+            return self.map_cap;
         }
 
         /// find the bucket index for a key, or null if missing.
         pub fn getIndex(self: Self, key: []const u8) ?usize {
             var i: usize = 0;
-            const keyHash: u64 = hashMethod(key);
-            const baseIdx = keyHash & (self.mapCap - 1);
-            var bucketIdx = baseIdx;
-            var foundKey = false;
+            const key_hash: u64 = hash_method(key);
+            const base_idx = key_hash & (self.map_cap - 1);
+            var bucket_idx = base_idx;
+            var found_key = false;
 
-            const secondHash: u64 = switch (probe) {
+            // calculate the second hash for doublehashing if enabled.
+            const second_hash: u64 = switch (probe) {
                 .DoubleHash => zh.cityHash64(key) | 1,
                 else => undefined,
             };
 
+            // probe until an empty slot is found or the key is found.
             while (i < self.length()) {
-                switch (self.mapTable[bucketIdx]) {
+                switch (self.map_table[bucket_idx]) {
                     .Empty => break,
-                    .Occupied => |kvPair| {
-                        if (eqlMethod(kvPair.key, key)) {
-                            foundKey = true;
+                    .Occupied => |kv_pair| {
+                        if (eql_method(kv_pair.key, key)) {
+                            found_key = true;
                             break;
                         }
-                        bucketIdx = probeMethod(baseIdx, i, secondHash) & (self.mapCap - 1);
+                        bucket_idx = probe_method(base_idx, i, second_hash) & (self.map_cap - 1);
                         i += 1;
                     },
                 }
             }
 
-            return if (foundKey) bucketIdx else null;
+            return if (found_key) bucket_idx else null;
         }
 
         /// get the value for a key, or null if not found.
         pub fn get(self: Self, key: []const u8) ?V {
             const idx = self.getIndex(key) orelse return null;
-            const bucket = self.mapTable[idx];
+            const bucket = self.map_table[idx];
             return switch (bucket) {
-                .Occupied => |kvPair| kvPair.value,
+                .Occupied => |kv_pair| kv_pair.value,
                 .Empty => null,
             };
         }
@@ -293,14 +305,14 @@ test "probe strategies consistency" {
         .{ "y", 200 },
     };
     const QMap = ComptimeHashMap(u32, null, Prober.Bidirectional, null);
-    const mapQ = QMap.init(kv);
-    try std.testing.expect(mapQ.get("x") orelse 0 == 100);
-    try std.testing.expect(mapQ.get("y") orelse 0 == 200);
+    const map_q = QMap.init(kv);
+    try std.testing.expect(map_q.get("x") orelse 0 == 100);
+    try std.testing.expect(map_q.get("y") orelse 0 == 200);
 
     const RMap = ComptimeHashMap(u32, null, Prober.DoubleHash, null);
-    const mapR = RMap.init(kv);
-    try std.testing.expect(mapR.get("x") orelse 0 == 100);
-    try std.testing.expect(mapR.get("y") orelse 0 == 200);
+    const map_r = RMap.init(kv);
+    try std.testing.expect(map_r.get("x") orelse 0 == 100);
+    try std.testing.expect(map_r.get("y") orelse 0 == 200);
 }
 
 test "toSlice integrity" {
@@ -396,9 +408,9 @@ test "custom hash and equality" {
         .{ "ccc", 30 },
     };
     const LenMapT = ComptimeHashMap(u32, lenHash, null, lenEq);
-    const lenMap = LenMapT.init(kv);
+    const len_map = LenMapT.init(kv);
 
-    try std.testing.expect(lenMap.get("zz") orelse 0 == 20);
-    try std.testing.expect(lenMap.get("XYZ") orelse 0 == 30);
-    try std.testing.expect(lenMap.get("QRSD") == null);
+    try std.testing.expect(len_map.get("zz") orelse 0 == 20);
+    try std.testing.expect(len_map.get("XYZ") orelse 0 == 30);
+    try std.testing.expect(len_map.get("QRSD") == null);
 }

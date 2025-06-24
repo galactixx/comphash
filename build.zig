@@ -4,6 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // create the library module for the comptime hash map
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/lib.zig"),
         .target = target,
@@ -18,6 +19,7 @@ pub fn build(b: *std.Build) void {
     lib.addIncludePath(b.path("include/"));
     b.installArtifact(lib);
 
+    // add the zighash dependency for the hash function
     const zh_pkg = b.dependency("zighash", .{ .target = target, .optimize = optimize });
     const zh_mod = zh_pkg.module("zighash");
     lib_mod.addImport("zighash", zh_mod);
@@ -27,6 +29,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    // add the dependencies to the test module
     hash_tests.root_module.addImport("zighash", zh_mod);
 
     const run_tests = b.addRunArtifact(hash_tests);
