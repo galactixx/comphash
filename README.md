@@ -16,9 +16,6 @@ Perfect for command‑line flag tables, protocol constant look‑ups, compile‑
 | **Hash Algorithms**     | Use any `fn([]const u8) u64` — the default is **xxHash64** from [`zighash`](https://github.com/galactixx/zighash). |
 | **Probing**             | `Prober` enum: `Linear`, `DoubleHash`, `Bidirectional`, `Triangular`.                                              |
 | **Iterators**           | Type‑driven `keys()`, `values()`, `items()`—all lazy and allocation‑free.                                          |
-| **No Deps**             | Pure Zig, no libc, no external libs.                                                                               |
-| **Allocation**          | No runtime allocations or pointer chasing.                                                                         |
-| **Comprehensive Tests** | Built‑in `std.testing` ensures correctness across probing strategies.                                              |
 
 ---
 
@@ -81,7 +78,7 @@ pub fn ComptimeHashMap(
 ) type
 ```
 
-Calling this generic returns **a new struct type** with the following notable members:
+Calling this generic returns **a new struct type** with the following methods:
 
 | Method                            | Description                                                              |
 | --------------------------------- | ------------------------------------------------------------------------ |
@@ -94,7 +91,7 @@ Calling this generic returns **a new struct type** with the following notable me
 
 ### `Prober`
 
-Enum controlling collision resolution:
+An enum that provides options for probing:
 
 * `Linear` – `base + i`
 * `DoubleHash` – `base + i * (h(key) | 1)`
